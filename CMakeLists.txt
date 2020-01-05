@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.16.2)
 
 project(finder LANGUAGES CXX)
 
+find_package(OpenSSL REQUIRED)
+
 add_executable(finder finder.cpp)
+
+add_dependencies(finder OpenSSL::SSL)
 
 target_compile_features(finder PRIVATE cxx_std_20)
 

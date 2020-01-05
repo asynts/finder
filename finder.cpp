@@ -1,4 +1,6 @@
 #include <array>
+#include <bit>
+#include <cstring>
 #include <iostream>
 #include <string_view>
 #include <vector>
@@ -20,7 +22,7 @@ public:
         EVP_MD_CTX_free(context);
     }
 
-    void compute(std::string_view input, std::array<std::byte, 32> output) {
+    void compute(std::string_view input, std::array<unsigned char, 32> output) {
         EVP_DigestInit_ex(context, algorithm, NULL);
         EVP_DigestUpdate(context, input.data(), input.size());
         EVP_DigestFinal_ex(context, reinterpret_cast<unsigned char *>(output.data()), NULL);
@@ -28,19 +30,59 @@ public:
 };
 
 struct marshaller {
-    void write_size(size_t value);
+    std::basic_ostream<unsigned char> &output;
 
-    template <typename Iterator>
-    void write_bytes(Iterator begin, Iterator end);
+    void write_size(size_t value) {
+        // TODO std::bit_cast
+        std::array<unsigned char, sizeof(value)> value_bytes;
+        std::memcpy(&value_bytes, &value, sizeof(value));
+
+        output.write(value_bytes.data(), value_bytes.size());
+    }
+
+    template <typename Char>
+    void write_bytes(const Char *data, size_t size) {
+        output.write(data, size);
+    }
 };
 
 struct entry {
     std::string filename;
-    std::array<std::byte, 32> digest;
+    std::array<unsigned char, 32> digest;
+
+    bool operator<(const entry &rhs) const noexcept {
+        // This compare operation doesn't neccessary make sense, think of
+        // little endian systems, it just has to be some ordering such that
+        // a list of entries can be sorted.
+        //
+        // The compiler isn't allowed to do the optimization below, because
+        // on little endian systems it would change the outcome therefor the
+        // optimization is done in code.
+        //
+        // TODO Measure.
+
+        for(size_t idx = 0; idx < digest.size(); idx += sizeof(size_t)) {
+            // TODO std::bit_cast
+            size_t lhs_value;
+            std::memcpy(&lhs_value, &digest[idx], sizeof(size_t));
+
+            // TODO std::bit_cast
+            size_t rhs_value;
+            std::memcpy(&rhs_value, &rhs.digest[idx], sizeof(size_t));
+
+            if(lhs_value < rhs_value) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 };
 
 void marshall_database(std::vector<entry> &entries, marshaller output) {
-    // TODO sort
+    // Ensure that the entries are sorted to begin with, such that they can
+    // be searched very quickly.
+    std::sort(entries.begin(), entries.end());
 
     // This expression evaluates to the offset of the lookup table.
     size_t offset = sizeof(size_t) + (32 + sizeof(size_t)) * entries.size();
@@ -49,7 +91,7 @@ void marshall_database(std::vector<entry> &entries, marshaller output) {
 
     // Write the index.
     for(const auto &entry : entries) {
-        output.write_bytes(entry.digest.begin(), entry.digest.end());
+        output.write_bytes(entry.digest.data(), entry.digest.size());
         output.write_size(offset);
 
         offset += sizeof(size_t) + entry.filename.size();
@@ -58,7 +100,7 @@ void marshall_database(std::vector<entry> &entries, marshaller output) {
     // Write the lookup table.
     for(const auto &entry : entries) {
         output.write_size(entry.filename.size());
-        output.write_bytes(entry.filename.data(), entry.filename.data() + entry.filename.size());
+        output.write_bytes(reinterpret_cast<const unsigned char*>(entry.filename.data()), entry.filename.size());
     }
 }
 
