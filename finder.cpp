@@ -1,7 +1,68 @@
+#include <array>
 #include <iostream>
 #include <string_view>
+#include <vector>
 
-using namespace std::literals::string_view_literals;
+#include <openssl/evp.h>
+
+struct SHA3_256 {
+private:
+    const EVP_MD *algorithm;
+    EVP_MD_CTX *context;
+
+public:
+    SHA3_256() {
+        algorithm = EVP_sha3_256();
+        context = EVP_MD_CTX_new();
+    }
+
+    ~SHA3_256() {
+        EVP_MD_CTX_free(context);
+    }
+
+    void compute(std::string_view input, std::array<std::byte, 32> output) {
+        EVP_DigestInit_ex(context, algorithm, NULL);
+        EVP_DigestUpdate(context, input.data(), input.size());
+        EVP_DigestFinal_ex(context, reinterpret_cast<unsigned char *>(output.data()), NULL);
+    }
+};
+
+struct marshaller {
+    void write_size(size_t value);
+
+    template <typename Iterator>
+    void write_bytes(Iterator begin, Iterator end);
+};
+
+struct entry {
+    std::string filename;
+    std::array<std::byte, 32> digest;
+};
+
+void marshall_database(std::vector<entry> &entries, marshaller output) {
+    // TODO sort
+
+    // This expression evaluates to the offset of the lookup table.
+    size_t offset = sizeof(size_t) + (32 + sizeof(size_t)) * entries.size();
+
+    output.write_size(entries.size());
+
+    // Write the index.
+    for(const auto &entry : entries) {
+        output.write_bytes(entry.digest.begin(), entry.digest.end());
+        output.write_size(offset);
+
+        offset += sizeof(size_t) + entry.filename.size();
+    }
+
+    // Write the lookup table.
+    for(const auto &entry : entries) {
+        output.write_size(entry.filename.size());
+        output.write_bytes(entry.filename.data(), entry.filename.data() + entry.filename.size());
+    }
+}
+
+/*
 
 void print_usage(std::ostream &out) {
     out << 1 + R"(
@@ -46,4 +107,9 @@ int main(int argc, const char **argv) {
             exit(EXIT_FAILURE);
         }
     }
+}
+
+*/
+
+int main() {
 }
