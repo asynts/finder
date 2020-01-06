@@ -7,6 +7,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <filesystem>
 
 constexpr std::size_t finder_abi_version = 0;
 
@@ -32,12 +33,8 @@ public:
 
 struct database {
     struct entry {
-        std::string filename;
+        std::string path;
         std::size_t digest;
-
-        bool operator<(const entry &rhs) const noexcept {
-            return digest < rhs.digest;
-        }
 
         bool operator<(size_t rhs) const noexcept {
             return digest < rhs;
@@ -51,11 +48,11 @@ private:
     std::hash<std::string_view> hasher;
 
 public:
-    void add(std::string_view filename) {
-        std::size_t digest = hasher(filename);
+    void add(std::filesystem::path path) {
+        std::size_t digest = hasher(path.filename().native());
 
         const auto iter = std::lower_bound(entries.begin(), entries.end(), digest);
-        entries.emplace(iter, entry{ std::string{filename}, digest });
+        entries.emplace(iter, entry{ path, digest });
     }
 
     void marshall(std::ostream &output) {
@@ -72,13 +69,13 @@ public:
             enc.write(entry.digest);
             enc.write(offset);
 
-            offset += sizeof(size_t) + entry.filename.size();
+            offset += sizeof(size_t) + entry.path.size();
         }
 
         // Write the lookup table.
         for(const auto &entry : entries) {
-            enc.write(entry.filename.size());
-            enc.write(entry.filename.data(), entry.filename.size());
+            enc.write(entry.path.size());
+            enc.write(entry.path.data(), entry.path.size());
         }
     }
 };
@@ -151,12 +148,12 @@ public:
         std::size_t length;
         dec.decode(length);
 
-        std::string filename;
-        filename.resize(length);
+        std::string path;
+        path.resize(length);
 
-        dec.decode(filename.data(), length);
+        dec.decode(path.data(), length);
 
-        return filename;
+        return path;
     }
 
     std::vector<std::string> locate(std::string_view filename) const {
