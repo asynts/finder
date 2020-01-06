@@ -38,17 +38,31 @@ struct database {
         bool operator<(const entry &rhs) const noexcept {
             return digest < rhs.digest;
         }
+
+        bool operator<(size_t rhs) const noexcept {
+            return digest < rhs;
+        }
     };
 
-    template <typename Container>
-    static void marshall(Container &&entries, std::ostream &output) {
+private:
+    // Sorted lists can be searched faster, thus this list shall always be
+    // sorted.
+    std::vector<entry> entries;
+    std::hash<std::string_view> hasher;
+
+public:
+    void add(std::string_view filename) {
+        std::size_t digest = hasher(filename);
+
+        const auto iter = std::lower_bound(entries.begin(), entries.end(), digest);
+        entries.emplace(iter, entry{ std::string{filename}, digest });
+    }
+
+    void marshall(std::ostream &output) {
         encoder enc{output};
 
-        // Sorted lists can be searched faster.
-        std::sort(entries.begin(), entries.end());
-
         // This expression evaluates to the offset of the lookup table.
-        size_t offset = 2 * sizeof(size_t) + 2 * sizeof(size_t) * entries.size();
+        std::size_t offset = 2 * sizeof(std::size_t) * (1 + entries.size());
 
         enc.write(finder_abi_version);
         enc.write(entries.size());
@@ -93,15 +107,24 @@ public:
     }
 };
 
+// This database is lazy because only the hashes are decoded, and strings are
+// extracted on demand using their offset.
 struct lazy_database {
     struct entry {
         std::size_t digest;
         std::size_t offset;
+
+        bool operator<(std::size_t rhs) const noexcept {
+            return digest < rhs;
+        }
     };
 
+private:
     std::vector<entry> entries;
     mutable decoder dec;
+    std::hash<std::string_view> hasher;
 
+public:
     lazy_database(std::istream &input)
         : dec{input}
     {
@@ -137,10 +160,21 @@ struct lazy_database {
     }
 
     std::vector<std::string> locate(std::string_view filename) const {
-        std::terminate(); // TODO
+        std::vector<std::string> matches;
+
+        const size_t digest = hasher(filename);
+
+        auto iter = std::lower_bound(entries.begin(), entries.end(), digest);
+
+        while(iter != entries.end() && iter->digest == digest) {
+            matches.push_back(lookup(iter->offset));
+
+            ++iter;
+        }
+
+        return matches;
     }
 };
-
 
 int main() {
 }
