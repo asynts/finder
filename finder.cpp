@@ -5,6 +5,7 @@
 #include <istream>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "sha.cpp"
@@ -49,7 +50,7 @@ public:
     }
 
     void seek(std::size_t offset) {
-        input.seek(offset);
+        input.seekg(offset);
     }
 };
 
@@ -65,7 +66,7 @@ struct entry {
     }
 
     bool operator<(const entry &rhs) const noexcept {
-        for(size_t idx = 0; idx < 32; ++idx) {
+        for(std::size_t idx = 0; idx < 32; ++idx) {
             if(digest[idx] < rhs.digest[idx]) {
                 return true;
             }
@@ -85,24 +86,24 @@ public:
         database db;
         decoder dec{input};
 
-        size_t count;
+        std::size_t count;
         dec.read(count);
 
         db.entries.resize(count);
 
-        size_t offset = sizeof(size_t);
-        for(size_t idx = 0; idx < count; ++idx) {
+        std::size_t offset = sizeof(std::size_t);
+        for(std::size_t idx = 0; idx < count; ++idx) {
             entry &entry = db.entries[idx];
 
             dec.seek(offset);
-            dec.read(&entry.digest, 32);
+            dec.read(entry.digest.data(), 32);
 
-            size_t reference;
+            std::size_t reference;
             dec.read(reference);
 
             dec.seek(reference);
 
-            size_t length;
+            std::size_t length;
             dec.read(length);
 
             entry.filename.resize(length);
@@ -110,6 +111,8 @@ public:
 
             offset += 32 + sizeof(size_t);
         }
+
+        return db;
     }
 
     void save(std::basic_ostream<char> &output) {
@@ -143,6 +146,14 @@ public:
         hasher.compute(filename, digest);
 
         entries.emplace_back(filename, digest);
+    }
+
+    std::vector<entry>& raw() {
+        return entries;
+    }
+
+    const std::vector<entry>& raw() const {
+        return entries;
     }
 };
 
