@@ -6,7 +6,8 @@ find_package(OpenSSL REQUIRED)
 
 add_executable(finder finder.cpp)
 
-add_dependencies(finder OpenSSL::SSL)
+target_link_libraries(finder PRIVATE ${OPENSSL_LIBRARIES})
+target_include_directories(finder PRIVATE ${OPENSSL_INCLUDE_DIR})
 
 target_compile_features(finder PRIVATE cxx_std_20)
 
