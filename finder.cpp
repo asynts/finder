@@ -8,9 +8,7 @@
 #include <string_view>
 #include <vector>
 
-#include "sha.cpp"
-
-constexpr size_t finder_version = 0;
+constexpr std::size_t finder_abi_version = 0;
 
 struct encoder {
 private:
@@ -35,23 +33,10 @@ public:
 struct database {
     struct entry {
         std::string filename;
-        std::array<char, 32> digest;
-
-        entry() {
-        }
-
-        entry(std::string_view filename, const std::array<char, 32> &digest)
-            : filename(filename), digest(digest) {
-        }
+        std::size_t digest;
 
         bool operator<(const entry &rhs) const noexcept {
-            for(std::size_t idx = 0; idx < 32; ++idx) {
-                if(digest[idx] < rhs.digest[idx]) {
-                    return true;
-                }
-            }
-
-            return false;
+            return digest < rhs.digest;
         }
     };
 
@@ -63,14 +48,14 @@ struct database {
         std::sort(entries.begin(), entries.end());
 
         // This expression evaluates to the offset of the lookup table.
-        size_t offset = 2 * sizeof(size_t) + (32 + sizeof(size_t)) * entries.size();
+        size_t offset = 2 * sizeof(size_t) + 2 * sizeof(size_t) * entries.size();
 
-        enc.write(finder_version);
+        enc.write(finder_abi_version);
         enc.write(entries.size());
 
         // Write the index table.
         for(const auto &entry : entries) {
-            enc.write(entry.digest.data(), entry.digest.size());
+            enc.write(entry.digest);
             enc.write(offset);
 
             offset += sizeof(size_t) + entry.filename.size();
@@ -86,11 +71,11 @@ struct database {
 
 struct decoder {
 private:
-    std::istream input;
+    std::istream &input;
 
 public:
-    decoder(std::istream &&input)
-        : input{std::move(input)} { }
+    decoder(std::istream &input)
+        : input{input} { }
 
     void decode(size_t &value) {
         std::array<char, sizeof(std::size_t)> value_bytes;
@@ -110,37 +95,37 @@ public:
 
 struct lazy_database {
     struct entry {
-        std::array<char, 32> digest;
-        size_t offset;
+        std::size_t digest;
+        std::size_t offset;
     };
 
     std::vector<entry> entries;
     mutable decoder dec;
 
-    lazy_database(std::istream &&input)
-        : dec{std::move(input)}
+    lazy_database(std::istream &input)
+        : dec{input}
     {
-        size_t version;
-        dec.decode(version);
+        std::size_t abi_version;
+        dec.decode(abi_version);
 
-        if(version != finder_version) {
+        if(abi_version != finder_abi_version) {
             throw std::runtime_error{"invalid or outdated file format"};
         }
 
-        size_t count;
+        std::size_t count;
         dec.decode(count);
         entries.resize(count);
 
-        for(size_t idx=0; idx < count; ++idx) {
-            dec.decode(entries[idx].digest.data(), 32);
+        for(std::size_t idx=0; idx < count; ++idx) {
+            dec.decode(entries[idx].digest);
             dec.decode(entries[idx].offset);
         }
     }
 
-    std::string lookup(size_t offset) const {
+    std::string lookup(std::size_t offset) const {
         dec.seek(offset);
 
-        size_t length;
+        std::size_t length;
         dec.decode(length);
 
         std::string filename;
