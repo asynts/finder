@@ -47,14 +47,22 @@ public:
     void read(char *data, std::size_t size) {
         input.read(data, size);
     }
+
+    void seek(std::size_t offset) {
+        input.seek(offset);
+    }
 };
 
 struct entry {
     std::string filename;
     std::array<char, 32> digest;
 
+    entry() {
+    }
+
     entry(std::string_view filename, const std::array<char, 32> &digest)
-        : filename(filename), digest(digest) { }
+        : filename(filename), digest(digest) {
+    }
 
     bool operator<(const entry &rhs) const noexcept {
         for(size_t idx = 0; idx < 32; ++idx) {
@@ -74,9 +82,34 @@ private:
 
 public:
     static database load(std::basic_istream<char> &input) {
+        database db;
         decoder dec{input};
 
-        std::terminate(); // TODO
+        size_t count;
+        dec.read(count);
+
+        db.entries.resize(count);
+
+        size_t offset = sizeof(size_t);
+        for(size_t idx = 0; idx < count; ++idx) {
+            entry &entry = db.entries[idx];
+
+            dec.seek(offset);
+            dec.read(&entry.digest, 32);
+
+            size_t reference;
+            dec.read(reference);
+
+            dec.seek(reference);
+
+            size_t length;
+            dec.read(length);
+
+            entry.filename.resize(length);
+            dec.read(entry.filename.data(), length);
+
+            offset += 32 + sizeof(size_t);
+        }
     }
 
     void save(std::basic_ostream<char> &output) {
