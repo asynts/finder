@@ -2,19 +2,15 @@
 #include <array>
 #include <cstring>
 #include <exception>
-#include <istream>
-#include <ostream>
-#include <string>
-#include <string_view>
 #include <vector>
 #include <filesystem>
-
 #include <iostream>
 #include <fstream>
 
 namespace fs = std::filesystem;
 
 constexpr std::size_t finder_abi_version = 0;
+const fs::path finder_cache_path = ".findercache";
 
 struct encoder {
 private:
@@ -51,17 +47,15 @@ private:
     // sorted.
     std::vector<entry> entries;
 
-    std::hash<std::string_view> hasher;
-
 public:
     void add(fs::path path) {
-        std::size_t digest = hasher(path.filename().native());
+        std::size_t digest = fs::hash_value(path.filename());
 
         const auto iter = std::lower_bound(entries.begin(),
                                            entries.end(),
                                            digest);
 
-        entries.emplace(iter, entry{ path, digest });
+        entries.emplace(iter, entry{ path.lexically_normal().native(), digest });
     }
 
     void marshall(std::ostream &output) {
@@ -113,8 +107,8 @@ public:
     }
 };
 
-// This database is lazy because only the hashes are decoded, and strings are
-// extracted on demand using their offset.
+// This database is lazy because only the hashes are decoded, and the paths are
+// extracted on demand.
 struct lazy_database {
     struct entry {
         std::size_t digest;
@@ -128,7 +122,6 @@ struct lazy_database {
 private:
     std::vector<entry> entries;
     mutable decoder dec;
-    std::hash<std::string_view> hasher;
 
 public:
     lazy_database(std::istream &input)
@@ -151,7 +144,7 @@ public:
         }
     }
 
-    std::string lookup(std::size_t offset) const {
+    fs::path lookup(std::size_t offset) const {
         dec.seek(offset);
 
         std::size_t length;
@@ -165,10 +158,14 @@ public:
         return path;
     }
 
-    std::vector<std::string> locate(std::string_view filename) const {
-        std::vector<std::string> matches;
+    std::vector<fs::path> locate(fs::path filename) const {
+        if(filename.has_parent_path()) {
+            throw std::runtime_error{"can't search for paths"};
+        }
 
-        const size_t digest = hasher(filename);
+        std::vector<fs::path> matches;
+
+        const size_t digest = hash_value(filename);
 
         auto iter = std::lower_bound(entries.begin(), entries.end(), digest);
 
@@ -182,18 +179,25 @@ public:
     }
 };
 
+void rebuild_database(fs::path directory) {
+    database db;
+
+    for(const fs::path &path : fs::recursive_directory_iterator(directory)) {
+        db.add(path);
+    }
+
+    std::fstream output{directory / finder_cache_path, std::ios::out};
+    db.marshall(output);
+}
+
+void locate_exact_filename(fs::path filename, fs::path directory) {
+    std::fstream input{directory / finder_cache_path, std::ios::in};
+    lazy_database db{input};
+
+    for(const auto &path : db.locate(filename)) {
+        std::cout << path.native() << '\n';
+    }
+}
+
 int main() {
-    database db0;
-    for(const fs::path &path : fs::recursive_directory_iterator(".")) {
-        db0.add(path);
-    }
-
-    std::stringstream buffer;
-    db0.marshall(buffer);
-
-    lazy_database db1{buffer};
-
-    for(const auto &path : db1.locate("foo.txt")) {
-        std::cout << path << '\n';
-    }
 }
