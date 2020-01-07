@@ -1,16 +1,35 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
-#include <exception>
+#include <cstdlib>
 #include <vector>
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <string_view>
 
 namespace fs = std::filesystem;
 
-constexpr std::size_t finder_abi_version = 0;
+constexpr std::size_t finder_abi_version = 2;
 const fs::path finder_cache_path = ".findercache";
+
+constexpr std::string_view finder_usage_page = 1 + R"(
+usage: finder [OPTIONS] FILENAME [DIRECTORY]
+       finder [OPTIONS] --rebuild [DIRECTORY]
+
+FILENAME                filename to locate; must not have a parent directory
+DIRECTORY               defaults to '.'
+
+OPTIONS
+        --help          display usage information
+        --version       display version information
+
+    -r, --rebuild       rebuild cache
+)";
+
+constexpr std::string_view finder_version_page = 1 + R"(
+finder 1.0.0
+)";
 
 struct encoder {
 private:
@@ -131,7 +150,9 @@ public:
         dec.decode(abi_version);
 
         if(abi_version != finder_abi_version) {
-            throw std::runtime_error{"invalid or outdated file format"};
+            std::cerr << "error: cache was build by a different version of "
+                      << "finder\n";
+            std::exit(EXIT_FAILURE);
         }
 
         std::size_t count;
@@ -159,10 +180,6 @@ public:
     }
 
     std::vector<fs::path> locate(fs::path filename) const {
-        if(filename.has_parent_path()) {
-            throw std::runtime_error{"can't search for paths"};
-        }
-
         std::vector<fs::path> matches;
 
         const size_t digest = hash_value(filename);
@@ -179,7 +196,7 @@ public:
     }
 };
 
-void rebuild_database(fs::path directory) {
+void rebuild_cache(fs::path directory) {
     database db;
 
     for(const fs::path &path : fs::recursive_directory_iterator(directory)) {
@@ -191,6 +208,17 @@ void rebuild_database(fs::path directory) {
 }
 
 void locate_exact_filename(fs::path filename, fs::path directory) {
+    if(filename.has_parent_path()) {
+        std::cerr << "error: this tool only indexes filenames, therefor paths "
+                  << "can't be located\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    if(not fs::exists(directory / finder_cache_path)) {
+        std::cerr << "error: no cache has been build for this directory\n";
+        std::exit(EXIT_FAILURE);
+    }
+
     std::fstream input{directory / finder_cache_path, std::ios::in};
     lazy_database db{input};
 
@@ -199,5 +227,71 @@ void locate_exact_filename(fs::path filename, fs::path directory) {
     }
 }
 
-int main() {
+int main(int argc, const char **argv) {
+    bool do_rebuild = false;
+
+    std::vector<std::string_view> positional_arguments;
+
+    // Start at index one such that the executable name is skipped.
+    for(size_t idx = 1; idx < static_cast<size_t>(argc); ++idx) {
+        const auto argument = std::string_view{argv[idx]};
+
+        if(argument == "--help") {
+            std::cout << finder_usage_page;
+            std::exit(EXIT_SUCCESS);
+        }
+
+        if(argument == "--version") {
+            std::cout << finder_version_page;
+            std::exit(EXIT_SUCCESS);
+        }
+
+        if(argument == "--rebuild" or argument == "-r") {
+            if(do_rebuild) {
+                std::cerr << "error: flag '--rebuild' may only be specified "
+                          << "once\n";
+                std::exit(EXIT_FAILURE);
+            }
+
+            do_rebuild = true;
+            continue;
+        }
+
+        if(argument.starts_with("-")) {
+            std::cerr << "error: invalid command line option '" << argument
+                      << "'\n\n" << finder_usage_page;
+            std::exit(EXIT_FAILURE);
+        }
+
+        positional_arguments.push_back(argument);
+    }
+
+    if(do_rebuild) {
+        if(positional_arguments.size() == 0) {
+            rebuild_cache(".");
+            std::exit(EXIT_SUCCESS);
+        } else if(positional_arguments.size() == 1) {
+            rebuild_cache(positional_arguments[0]);
+            std::exit(EXIT_SUCCESS);
+        } else {
+            std::cerr << "error: expected 1 positional argument, got "
+                      << positional_arguments.size() << "\n\n"
+                      << finder_usage_page;
+            std::exit(EXIT_FAILURE);
+        }
+    } else {
+        if(positional_arguments.size() == 1) {
+            locate_exact_filename(positional_arguments[0], ".");
+            std::exit(EXIT_SUCCESS);
+        } else if(positional_arguments.size() == 2) {
+            locate_exact_filename(positional_arguments[0],
+                                  positional_arguments[1]);
+            std::exit(EXIT_SUCCESS);
+        } else {
+            std::cerr << "error: expected 1 or 2 positional arguments, got "
+                      << positional_arguments.size() << "\n\n"
+                      << finder_usage_page;
+            std::exit(EXIT_FAILURE);
+        }
+    }
 }
