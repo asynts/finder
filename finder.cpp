@@ -9,6 +9,11 @@
 #include <vector>
 #include <filesystem>
 
+#include <iostream>
+#include <fstream>
+
+namespace fs = std::filesystem;
+
 constexpr std::size_t finder_abi_version = 0;
 
 struct encoder {
@@ -32,6 +37,7 @@ public:
 };
 
 struct database {
+private:
     struct entry {
         std::string path;
         std::size_t digest;
@@ -41,17 +47,20 @@ struct database {
         }
     };
 
-private:
     // Sorted lists can be searched faster, thus this list shall always be
     // sorted.
     std::vector<entry> entries;
+
     std::hash<std::string_view> hasher;
 
 public:
-    void add(std::filesystem::path path) {
+    void add(fs::path path) {
         std::size_t digest = hasher(path.filename().native());
 
-        const auto iter = std::lower_bound(entries.begin(), entries.end(), digest);
+        const auto iter = std::lower_bound(entries.begin(),
+                                           entries.end(),
+                                           digest);
+
         entries.emplace(iter, entry{ path, digest });
     }
 
@@ -174,4 +183,17 @@ public:
 };
 
 int main() {
+    database db0;
+    for(const fs::path &path : fs::recursive_directory_iterator(".")) {
+        db0.add(path);
+    }
+
+    std::stringstream buffer;
+    db0.marshall(buffer);
+
+    lazy_database db1{buffer};
+
+    for(const auto &path : db1.locate("foo.txt")) {
+        std::cout << path << '\n';
+    }
 }
