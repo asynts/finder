@@ -31,6 +31,8 @@ OPTIONS
 
 constexpr std::string_view finder_version_page = 1 + R"(
 finder 1.0.0
+
+Copyright (C) 2020 Paul Scharnofske; Licensed under the terms of MIT.
 )";
 
 struct encoder {
