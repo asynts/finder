@@ -11,3 +11,6 @@ find_package(fmt)
 
 add_executable(finder finder.cpp)
 target_link_libraries(finder PRIVATE fmt::fmt)
+
+install(TARGETS finder
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
