@@ -12,7 +12,7 @@
 
 namespace fs = std::filesystem;
 
-constexpr std::size_t finder_abi_version = 2;
+constexpr std::size_t finder_abi_version = 3;
 const fs::path        finder_cache_path  = ".findercache";
 
 constexpr std::string_view finder_help_page = 1 + R"(
