@@ -2,12 +2,12 @@ cmake_minimum_required(VERSION 3.16.2)
 
 project(finder LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED YES)
+
+add_compile_options(-Wall -Wextra -pedantic)
+
+find_package(fmt)
+
 add_executable(finder finder.cpp)
-
-target_compile_features(finder PUBLIC cxx_std_20)
-
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    target_compile_options(finder PRIVATE "-Wall")
-    target_compile_options(finder PRIVATE "-Wextra")
-    target_compile_options(finder PRIVATE "-pedantic")
-endif()
+target_link_libraries(finder PRIVATE fmt::fmt)

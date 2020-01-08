@@ -10,6 +10,8 @@
 
 namespace fs = std::filesystem;
 
+#include <fmt/format.h>
+
 constexpr std::size_t finder_abi_version = 2;
 const fs::path finder_cache_path = ".findercache";
 
@@ -62,8 +64,7 @@ private:
         }
     };
 
-    // Sorted lists can be searched faster, thus this list shall always be
-    // sorted.
+    // Sorted lists can be searched faster, thus this list shall always be sorted.
     std::vector<entry> entries;
 
 public:
@@ -126,8 +127,7 @@ public:
     }
 };
 
-// This database is lazy because only the hashes are decoded, and the paths are
-// extracted on demand.
+// This database is lazy because only the hashes are decoded, and the paths are extracted on demand.
 struct lazy_database {
     struct entry {
         std::size_t digest;
@@ -150,8 +150,7 @@ public:
         dec.decode(abi_version);
 
         if(abi_version != finder_abi_version) {
-            std::cerr << "error: cache was build by a different version of "
-                      << "finder\n";
+            std::cerr << "error: cache was build by a different version of finder\n";
             std::exit(EXIT_FAILURE);
         }
 
@@ -209,21 +208,24 @@ void rebuild_cache(fs::path directory) {
 
 void locate_exact_filename(fs::path filename, fs::path directory) {
     if(filename.has_parent_path()) {
-        std::cerr << "error: this tool only indexes filenames, therefor paths "
-                  << "can't be located\n";
+        std::cerr << "error: this tool only indexes filenames, therefor paths can't be located\n";
         std::exit(EXIT_FAILURE);
     }
 
-    if(not fs::exists(directory / finder_cache_path)) {
-        std::cerr << "error: no cache has been build for this directory\n";
+    const auto cache_filepath = (directory / finder_cache_path).lexically_normal();
+
+    if(not fs::exists(cache_filepath)) {
+        std::cerr << fmt::format("error: no cache has been build for this directory, the file '{}' doesn't exist\n",
+                                 cache_filepath.native());
         std::exit(EXIT_FAILURE);
     }
 
-    std::fstream input{directory / finder_cache_path, std::ios::in};
+    std::fstream input{cache_filepath, std::ios::in};
     lazy_database db{input};
 
     for(const auto &path : db.locate(filename)) {
-        std::cout << path.native() << '\n';
+        std::cout << fmt::format("{}\n",
+                                 path.native());
     }
 }
 
@@ -248,8 +250,9 @@ int main(int argc, const char **argv) {
 
         if(argument == "--rebuild" or argument == "-r") {
             if(do_rebuild) {
-                std::cerr << "error: flag '--rebuild' may only be specified "
-                          << "once\n";
+                std::cerr << fmt::format("error: invalid command line option '{}'\n\n{}",
+                                         argument,
+                                         finder_usage_page);
                 std::exit(EXIT_FAILURE);
             }
 
@@ -258,8 +261,9 @@ int main(int argc, const char **argv) {
         }
 
         if(argument.starts_with("-")) {
-            std::cerr << "error: invalid command line option '" << argument
-                      << "'\n\n" << finder_usage_page;
+            std::cerr << fmt::format("error: invalid command line option '{}'\n\n{}",
+                                     argument,
+                                     finder_usage_page);
             std::exit(EXIT_FAILURE);
         }
 
@@ -274,9 +278,9 @@ int main(int argc, const char **argv) {
             rebuild_cache(positional_arguments[0]);
             std::exit(EXIT_SUCCESS);
         } else {
-            std::cerr << "error: expected 1 positional argument, got "
-                      << positional_arguments.size() << "\n\n"
-                      << finder_usage_page;
+            std::cerr << fmt::format("error: expected 1 positional argument, got {}\n\n{}",
+                                     positional_arguments.size(),
+                                     finder_usage_page);
             std::exit(EXIT_FAILURE);
         }
     } else {
@@ -288,9 +292,9 @@ int main(int argc, const char **argv) {
                                   positional_arguments[1]);
             std::exit(EXIT_SUCCESS);
         } else {
-            std::cerr << "error: expected 1 or 2 positional arguments, got "
-                      << positional_arguments.size() << "\n\n"
-                      << finder_usage_page;
+            std::cerr << fmt::format("error: expected 1 or 2 positional arguments, got {}\n\n{}",
+                                     positional_arguments.size(),
+                                     finder_usage_page);
             std::exit(EXIT_FAILURE);
         }
     }
