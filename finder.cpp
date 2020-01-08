@@ -147,7 +147,13 @@ public:
     lazy_database(std::istream &input)
         : dec{input}
     {
-        // Notice: It is expected, that the ABI version was already consumed and validated.
+        std::size_t abi_version;
+        dec.decode(abi_version);
+
+        if(abi_version != finder_abi_version) {
+            std::cerr << "error: cache was build by a different version of finder\n";
+            std::exit(EXIT_FAILURE);
+        }
 
         std::size_t count;
         dec.decode(count);
