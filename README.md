@@ -9,12 +9,14 @@ queried for filenames.
 ~~~none
 usage: finder [OPTIONS] FILENAME [DIRECTORY]
        finder [OPTIONS] --rebuild [DIRECTORY]
+       finder [OPTIONS] --list [DIRECTORY]
 
 OPTIONS
         --help          display usage information
         --version       display version information
 
     -r, --rebuild       rebuild cache
+    -l, --list          list all filepaths from the cache
 ~~~
 
 ## Example
@@ -36,4 +38,9 @@ $ finder -r
 $ finder foo.txt
 foo.txt
 a/foo.txt
+$ finder --list
+a/b/bar.txt
+a/b/c/d/baz.txt
+a/foo.txt
+foo.txt
 ~~~

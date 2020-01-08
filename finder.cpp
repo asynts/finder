@@ -18,12 +18,14 @@ const fs::path finder_cache_path = ".findercache";
 constexpr std::string_view finder_usage_page = 1 + R"(
 usage: finder [OPTIONS] FILENAME [DIRECTORY]
        finder [OPTIONS] --rebuild [DIRECTORY]
+       finder [OPTIONS] --list [DIRECTORY]
 
 OPTIONS
         --help          display usage information
         --version       display version information
 
     -r, --rebuild       rebuild cache
+    -l, --list          list all filepaths from the cache
 )";
 
 constexpr std::string_view finder_version_page = 1 + R"(
@@ -207,15 +209,14 @@ void rebuild_cache(fs::path directory) {
 
 void locate_exact_filename(fs::path filename, fs::path directory) {
     if(filename.has_parent_path()) {
-        std::cerr << "error: this tool only indexes filenames, therefor paths can't be located\n";
+        std::cerr << "error: can't search for paths\n";
         std::exit(EXIT_FAILURE);
     }
 
     const auto cache_filepath = (directory / finder_cache_path).lexically_normal();
 
     if(not fs::exists(cache_filepath)) {
-        std::cerr << fmt::format("error: no cache has been build for this directory, the file '{}' doesn't exist\n",
-                                 cache_filepath.native());
+        std::cerr << "error: no cache has been build for this directory\n";
         std::exit(EXIT_FAILURE);
     }
 
@@ -228,8 +229,47 @@ void locate_exact_filename(fs::path filename, fs::path directory) {
     }
 }
 
+void list_all_filepaths(fs::path directory) {
+    const auto cache_filepath = (directory / finder_cache_path).lexically_normal();
+
+    if(not fs::exists(cache_filepath)) {
+        std::cerr << "error: no cache has been build for this directory\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::fstream input{cache_filepath, std::ios::in};
+    decoder dec{input};
+
+    std::size_t abi_version;
+    dec.decode(abi_version);
+
+    if(abi_version != finder_abi_version) {
+        std::cerr << "error: cache was build by a different version of finder\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::size_t count;
+    dec.decode(count);
+
+    // Seek to the start of the lookup table.
+    dec.seek( 2 * sizeof(std::size_t) * (1 + count) );
+
+    for(std::size_t idx = 0; idx < count; ++idx) {
+        std::size_t length;
+        dec.decode(length);
+
+        std::string filepath;
+        filepath.resize(length);
+
+        dec.decode(filepath.data(), length);
+
+        std::cout << filepath << '\n';
+    }
+}
+
 int main(int argc, const char **argv) {
-    bool do_rebuild = false;
+    bool do_rebuild = false,
+         do_list = false;
 
     std::vector<std::string_view> positional_arguments;
 
@@ -248,14 +288,12 @@ int main(int argc, const char **argv) {
         }
 
         if(argument == "--rebuild" or argument == "-r") {
-            if(do_rebuild) {
-                std::cerr << fmt::format("error: invalid command line option '{}'\n\n{}",
-                                         argument,
-                                         finder_usage_page);
-                std::exit(EXIT_FAILURE);
-            }
-
             do_rebuild = true;
+            continue;
+        }
+
+        if(argument == "--list" or argument == "-l") {
+            do_list = true;
             continue;
         }
 
@@ -272,27 +310,38 @@ int main(int argc, const char **argv) {
     if(do_rebuild) {
         if(positional_arguments.size() == 0) {
             rebuild_cache(".");
-            std::exit(EXIT_SUCCESS);
         } else if(positional_arguments.size() == 1) {
             rebuild_cache(positional_arguments[0]);
-            std::exit(EXIT_SUCCESS);
         } else {
-            std::cerr << fmt::format("error: expected 1 positional argument, got {}\n\n{}",
-                                     positional_arguments.size(),
+            std::cerr << fmt::format("error: invalid arguments\n\n{}",
                                      finder_usage_page);
             std::exit(EXIT_FAILURE);
         }
-    } else {
+    }
+
+    // Notice: It's possible to both rebuild the cache and the list all files in the same
+    // command. The cache is rebuild before the filepaths are listed.
+
+    if(do_list) {
+        if(positional_arguments.size() == 0) {
+            list_all_filepaths(".");
+        } else if(positional_arguments.size() == 1) {
+            list_all_filepaths(positional_arguments[0]);
+        } else {
+            std::cerr << fmt::format("error: invalid arguments\n\n{}",
+                                     finder_usage_page);
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    if(!do_list and !do_rebuild) {
         if(positional_arguments.size() == 1) {
             locate_exact_filename(positional_arguments[0], ".");
-            std::exit(EXIT_SUCCESS);
         } else if(positional_arguments.size() == 2) {
             locate_exact_filename(positional_arguments[0],
                                   positional_arguments[1]);
-            std::exit(EXIT_SUCCESS);
         } else {
-            std::cerr << fmt::format("error: expected 1 or 2 positional arguments, got {}\n\n{}",
-                                     positional_arguments.size(),
+            std::cerr << fmt::format("error: invalid arguments\n\n{}",
                                      finder_usage_page);
             std::exit(EXIT_FAILURE);
         }
