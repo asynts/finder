@@ -13,9 +13,9 @@
 namespace fs = std::filesystem;
 
 constexpr std::size_t finder_abi_version = 2;
-const fs::path finder_cache_path = ".findercache";
+const fs::path        finder_cache_path  = ".findercache";
 
-constexpr std::string_view finder_usage_page = 1 + R"(
+constexpr std::string_view finder_help_page = 1 + R"(
 usage: finder [OPTIONS] FILENAME [DIRECTORY]
        finder [OPTIONS] --rebuild [DIRECTORY]
        finder [OPTIONS] --list [DIRECTORY]
@@ -54,6 +54,9 @@ public:
     }
 };
 
+// Represents a database of filepaths. It is encoded as hashtable where the hashes of the filenames,
+// not the filepaths, are stored; and a lookup table for the corresponding filepaths. Thus this database
+// can be searched very quickly, but only for exact matches.
 struct database {
 private:
     struct entry {
@@ -65,7 +68,8 @@ private:
         }
     };
 
-    // Sorted lists can be searched faster, thus this list shall always be sorted.
+    // Sorted lists can be searched faster; instead of sorting this list in the end, it starts out
+    // empty and is keept sorted.
     std::vector<entry> entries;
 
 public:
@@ -128,7 +132,7 @@ public:
     }
 };
 
-// This database is lazy because only the hashes are decoded, and the paths are extracted on demand.
+// This database is lazy because only the hashes are decoded, and the filepaths are extracted on demand.
 struct lazy_database {
     struct entry {
         std::size_t digest;
@@ -187,7 +191,6 @@ public:
 
         while(iter != entries.end() && iter->digest == digest) {
             matches.push_back( lookup(iter->offset) );
-
             ++iter;
         }
 
@@ -275,7 +278,7 @@ int main(int argc, const char **argv) {
         const auto argument = std::string_view{argv[idx]};
 
         if(argument == "--help") {
-            std::cout << finder_usage_page;
+            std::cout << finder_help_page;
             std::exit(EXIT_SUCCESS);
         }
 
@@ -297,7 +300,7 @@ int main(int argc, const char **argv) {
         if(argument.starts_with("-")) {
             std::cerr << fmt::format("error: invalid command line option '{}'\n\n{}",
                                      argument,
-                                     finder_usage_page);
+                                     finder_help_page);
             std::exit(EXIT_FAILURE);
         }
 
@@ -311,13 +314,13 @@ int main(int argc, const char **argv) {
             rebuild_cache(positional_arguments[0]);
         } else {
             std::cerr << fmt::format("error: invalid arguments\n\n{}",
-                                     finder_usage_page);
+                                     finder_help_page);
             std::exit(EXIT_FAILURE);
         }
     }
 
     // Notice: It's possible to both rebuild the cache and the list all files in the same
-    // command. The cache is rebuild before the filepaths are listed.
+    // command. In this case the cache is rebuild before the filepaths are listed.
 
     if(do_list) {
         if(positional_arguments.size() == 0) {
@@ -326,7 +329,7 @@ int main(int argc, const char **argv) {
             list_all_filepaths(positional_arguments[0]);
         } else {
             std::cerr << fmt::format("error: invalid arguments\n\n{}",
-                                     finder_usage_page);
+                                     finder_help_page);
             std::exit(EXIT_FAILURE);
         }
     }
@@ -339,7 +342,7 @@ int main(int argc, const char **argv) {
                                   positional_arguments[1]);
         } else {
             std::cerr << fmt::format("error: invalid arguments\n\n{}",
-                                     finder_usage_page);
+                                     finder_help_page);
             std::exit(EXIT_FAILURE);
         }
     }
