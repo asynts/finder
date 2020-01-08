@@ -214,7 +214,9 @@ std::fstream open_database_stream(fs::path directory) {
 void rebuild_cache(fs::path directory) {
     database db;
     for( const fs::path &path : fs::recursive_directory_iterator(directory) ) {
-        db.add(path);
+        if(not fs::is_directory(path)) {
+            db.add(path);
+        }
     }
 
     std::fstream output_stream{directory / finder_cache_path, std::ios::out};
