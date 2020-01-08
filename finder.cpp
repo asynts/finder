@@ -1,16 +1,16 @@
 #include <algorithm>
 #include <array>
-#include <cstring>
 #include <cstdlib>
-#include <vector>
+#include <cstring>
 #include <filesystem>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <string_view>
-
-namespace fs = std::filesystem;
+#include <vector>
 
 #include <fmt/format.h>
+
+namespace fs = std::filesystem;
 
 constexpr std::size_t finder_abi_version = 2;
 const fs::path finder_cache_path = ".findercache";
