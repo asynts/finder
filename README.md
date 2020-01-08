@@ -1,10 +1,39 @@
 # finder
 
-## Features
+This is essentially locate from findutils but for local directories. The program recursivly
+finds all files and writes them in a database `.findercache`. This database can then be
+queried for filenames.
 
-  - Build a database of files contained in a directory. This database is stored
-    in a user specific directory, but not the directory beeing indexed.
+## Usage
 
-  - Allow the user to query the database for specific file names or prefixes
-    of filenames. This operation should be very quick, definitly faster than
-    `find`.
+~~~none
+usage: finder [OPTIONS] FILENAME [DIRECTORY]
+       finder [OPTIONS] --rebuild [DIRECTORY]
+
+OPTIONS
+        --help          display usage information
+        --version       display version information
+
+    -r, --rebuild       rebuild cache
+~~~
+
+## Example
+
+~~~none
+$ tree
+.
+├── a
+│   ├── b
+│   │   ├── bar.txt
+│   │   └── c
+│   │       └── d
+│   │           └── baz.txt
+│   └── foo.txt
+└── foo.txt
+
+4 directories, 4 files
+$ finder -r
+$ finder foo.txt
+foo.txt
+a/foo.txt
+~~~

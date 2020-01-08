@@ -19,9 +19,6 @@ constexpr std::string_view finder_usage_page = 1 + R"(
 usage: finder [OPTIONS] FILENAME [DIRECTORY]
        finder [OPTIONS] --rebuild [DIRECTORY]
 
-FILENAME                filename to locate; must not have a parent directory
-DIRECTORY               defaults to '.'
-
 OPTIONS
         --help          display usage information
         --version       display version information
