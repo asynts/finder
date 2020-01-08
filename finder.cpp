@@ -76,7 +76,7 @@ public:
                                            entries.end(),
                                            digest);
 
-        entries.emplace(iter, entry{ path.lexically_normal().native(), digest });
+        entries.emplace(iter, entry{ path.native(), digest });
     }
 
     void marshall(std::ostream &output) {
@@ -147,14 +147,6 @@ public:
     lazy_database(std::istream &input)
         : dec{input}
     {
-        std::size_t abi_version;
-        dec.decode(abi_version);
-
-        if(abi_version != finder_abi_version) {
-            std::cerr << "error: cache was build by a different version of finder\n";
-            std::exit(EXIT_FAILURE);
-        }
-
         std::size_t count;
         dec.decode(count);
         entries.resize(count);
@@ -207,38 +199,16 @@ void rebuild_cache(fs::path directory) {
     db.marshall(output);
 }
 
-void locate_exact_filename(fs::path filename, fs::path directory) {
-    if(filename.has_parent_path()) {
-        std::cerr << "error: can't search for paths\n";
-        std::exit(EXIT_FAILURE);
-    }
-
-    const auto cache_filepath = (directory / finder_cache_path).lexically_normal();
+std::fstream open_database_stream(fs::path directory) {
+    const auto cache_filepath = directory / finder_cache_path;
 
     if(not fs::exists(cache_filepath)) {
         std::cerr << "error: no cache has been build for this directory\n";
         std::exit(EXIT_FAILURE);
     }
 
-    std::fstream input{cache_filepath, std::ios::in};
-    lazy_database db{input};
-
-    for(const auto &path : db.locate(filename)) {
-        std::cout << fmt::format("{}\n",
-                                 path.native());
-    }
-}
-
-void list_all_filepaths(fs::path directory) {
-    const auto cache_filepath = (directory / finder_cache_path).lexically_normal();
-
-    if(not fs::exists(cache_filepath)) {
-        std::cerr << "error: no cache has been build for this directory\n";
-        std::exit(EXIT_FAILURE);
-    }
-
-    std::fstream input{cache_filepath, std::ios::in};
-    decoder dec{input};
+    std::fstream input_stream{cache_filepath, std::ios::in};
+    decoder dec{input_stream};
 
     std::size_t abi_version;
     dec.decode(abi_version);
@@ -247,6 +217,31 @@ void list_all_filepaths(fs::path directory) {
         std::cerr << "error: cache was build by a different version of finder\n";
         std::exit(EXIT_FAILURE);
     }
+
+    // Notice: `std::fstream` instances can't be moved or copied; this works because of the
+    // "copy ellipson" optimization which is guaranteed by the standard.
+    return input_stream;
+}
+
+void locate_exact_filename(fs::path filename, fs::path directory) {
+    if(filename.has_parent_path()) {
+        std::cerr << "error: can't search for paths\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    auto input_stream = open_database_stream(directory);
+
+    lazy_database db{input_stream};
+    for(const auto &path : db.locate(filename)) {
+        std::cout << fmt::format("{}\n",
+                                 path.native());
+    }
+}
+
+void list_all_filepaths(fs::path directory) {
+    auto input_stream = open_database_stream(directory);
+
+    decoder dec{input_stream};
 
     std::size_t count;
     dec.decode(count);
