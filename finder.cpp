@@ -12,10 +12,10 @@
 
 namespace fs = std::filesystem;
 
-constexpr std::size_t finder_abi_version = 3;
-const fs::path        finder_cache_path  = ".findercache";
+constexpr std::size_t       finder_abi_version = 3;
+const     fs::path          finder_cache_path  = ".findercache";
 
-constexpr std::string_view finder_help_page = 1 + R"(
+constexpr std::string_view  finder_help_page = 1 + R"(
 usage: finder [OPTIONS] FILENAME [DIRECTORY]
        finder [OPTIONS] --rebuild [DIRECTORY]
        finder [OPTIONS] --list [DIRECTORY]
@@ -28,7 +28,7 @@ OPTIONS
     -l, --list          list all filepaths from the cache
 )";
 
-constexpr std::string_view finder_version_page = 1 + R"(
+constexpr std::string_view  finder_version_page = 1 + R"(
 finder 0.0.1
 
 Copyright (C) 2020 Paul Scharnofske; Licensed under the terms of MIT.
@@ -42,14 +42,14 @@ public:
     encoder(std::ostream &output)
         : output(output) { }
 
-    void write(std::size_t value) {
+    void write(const std::size_t value) {
         std::array<char, sizeof(value)> value_bytes;
         std::memcpy(&value_bytes, &value, sizeof(value));
 
         output.write(value_bytes.data(), value_bytes.size());
     }
 
-    void write(const char *data, std::size_t size) {
+    void write(const char *data, const std::size_t size) {
         output.write(data, size);
     }
 };
@@ -63,7 +63,8 @@ private:
         std::string path;
         std::size_t digest;
 
-        bool operator<(const entry &rhs) const noexcept {
+        [[nodiscard]]
+        constexpr bool operator<(const entry &rhs) const noexcept {
             return digest < rhs.digest;
         }
     };
@@ -71,7 +72,7 @@ private:
     std::vector<entry> entries;
 
 public:
-    void add(fs::path path) {
+    void add(const fs::path path) {
         const std::size_t digest = fs::hash_value(path.filename());
         entries.push_back(entry{ path.native(), digest });
     }
@@ -119,11 +120,11 @@ public:
         std::memcpy(&value, &value_bytes, sizeof(std::size_t));
     }
 
-    void decode(char *data, std::size_t size) {
+    void decode(char *data, const std::size_t size) {
         input.read(data, size);
     }
 
-    void seek(std::size_t offset) {
+    void seek(const std::size_t offset) {
         input.seekg(offset);
     }
 };
@@ -134,7 +135,8 @@ struct lazy_database {
         std::size_t digest;
         std::size_t offset;
 
-        bool operator<(std::size_t rhs) const noexcept {
+        [[nodiscard]]
+        constexpr bool operator<(const std::size_t rhs) const noexcept {
             return digest < rhs;
         }
     };
@@ -165,7 +167,7 @@ public:
         }
     }
 
-    fs::path lookup(std::size_t offset) const {
+    fs::path lookup(const std::size_t offset) const {
         dec.seek(offset);
 
         std::size_t length;
@@ -178,7 +180,7 @@ public:
         return path;
     }
 
-    std::vector<fs::path> locate(fs::path filename) const {
+    std::vector<fs::path> locate(const fs::path filename) const {
         std::vector<fs::path> matches;
 
         const size_t digest = hash_value(filename);
@@ -194,20 +196,7 @@ public:
     }
 };
 
-std::fstream open_database_stream(fs::path directory) {
-    const auto cache_filepath = directory / finder_cache_path;
-
-    if(not fs::exists(cache_filepath)) {
-        std::cerr << "error: no cache has been build for this directory\n";
-        std::exit(EXIT_FAILURE);
-    }
-
-    std::fstream stream{cache_filepath, std::ios::in};
-
-    return stream; // CE
-}
-
-void rebuild_cache(fs::path directory) {
+void rebuild_cache(const fs::path directory) {
     database db;
     for( const fs::path &path : fs::recursive_directory_iterator(directory) ) {
         if(not fs::is_directory(path)) {
@@ -219,7 +208,22 @@ void rebuild_cache(fs::path directory) {
     db.marshall(output_stream);
 }
 
-void locate_exact_filename(fs::path filename, fs::path directory) {
+std::fstream open_database_stream(const fs::path directory) {
+    const auto cache_filepath = directory / finder_cache_path;
+
+    if(not fs::exists(cache_filepath)) {
+        std::cerr << "error: no cache has been build for this directory\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::fstream stream{cache_filepath, std::ios::in};
+
+    // `std::fstream` instances can't be copied or moved, this works because of the copy ellipson
+    // optimization with is guaranteed by the standard.
+    return stream;
+}
+
+void locate_exact_filename(const fs::path filename, const fs::path directory) {
     if(filename.has_parent_path()) {
         std::cerr << "error: can't search for paths\n";
         std::exit(EXIT_FAILURE);
@@ -227,14 +231,14 @@ void locate_exact_filename(fs::path filename, fs::path directory) {
 
     auto input_stream = open_database_stream(directory);
 
-    lazy_database db{input_stream};
+    const lazy_database db{input_stream};
     for(const auto &path : db.locate(filename)) {
         std::cout << fmt::format("{}\n",
                                  path.native());
     }
 }
 
-void list_all_filepaths(fs::path directory) {
+void list_all_filepaths(const fs::path directory) {
     auto input_stream = open_database_stream(directory);
     decoder dec{input_stream};
 
