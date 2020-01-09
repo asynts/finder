@@ -2,7 +2,7 @@
 
 This is essentially locate from findutils buf for local directories.
 
-The program recursivly searches for files and builds a database which can be quickly
+The program recursivly searches for files and builds a database which can be
 queried for filenames.
 
 ## Usage
