@@ -63,28 +63,24 @@ private:
         std::string path;
         std::size_t digest;
 
-        bool operator<(size_t rhs) const noexcept {
-            return digest < rhs;
+        bool operator<(const entry &rhs) const noexcept {
+            return digest < rhs.digest;
         }
     };
 
-    // Sorted lists can be searched faster; instead of sorting this list in the end, it starts out
-    // empty and is keept sorted.
     std::vector<entry> entries;
 
 public:
     void add(fs::path path) {
-        std::size_t digest = fs::hash_value(path.filename());
-
-        const auto iter = std::lower_bound(entries.begin(),
-                                           entries.end(),
-                                           digest);
-
-        entries.emplace(iter, entry{ path.native(), digest });
+        const std::size_t digest = fs::hash_value(path.filename());
+        entries.push_back(entry{ path.native(), digest });
     }
 
     void marshall(std::ostream &output) {
         encoder enc{output};
+
+        // Sorted lists can be searched faster.
+        std::sort(entries.begin(), entries.end());
 
         // This expression evaluates to the offset of the lookup table.
         std::size_t offset = (1 + entries.size()) * 2 * sizeof(std::size_t);
