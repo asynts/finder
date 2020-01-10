@@ -271,7 +271,8 @@ void list_all_filepaths(const fs::path directory) {
 
 int main(int argc, const char **argv) {
     bool do_rebuild = false,
-         do_list = false;
+         do_list = false,
+         do_not_interpret_arguments = false;
 
     std::vector<std::string_view> positional_arguments;
 
@@ -279,34 +280,51 @@ int main(int argc, const char **argv) {
     for(size_t idx = 1; idx < static_cast<size_t>(argc); ++idx) {
         const auto argument = std::string_view{argv[idx]};
 
+        if(do_not_interpret_arguments) {
+            positional_arguments.push_back(argument);
+            continue;
+        }
         if(argument == "--help") {
             std::cout << finder_help_page;
             std::exit(EXIT_SUCCESS);
         }
-
         if(argument == "--version") {
             std::cout << finder_version_page;
             std::exit(EXIT_SUCCESS);
         }
-
-        if(argument == "--rebuild" or argument == "-r") {
+        if(argument == "--rebuild") {
             do_rebuild = true;
             continue;
         }
-
-        if(argument == "--list" or argument == "-l") {
+        if(argument == "--list") {
             do_list = true;
+            continue;
+        }
+        if(argument == "--") {
+            do_not_interpret_arguments = true;
             continue;
         }
 
         if(argument.starts_with("-")) {
-            std::cerr << fmt::format("error: invalid command line option '{}'\n\n{}",
-                                     argument,
-                                     finder_help_page);
-            std::exit(EXIT_FAILURE);
-        }
+            for(const char flag : argument.substr(1)) {
+                if(flag == 'r') {
+                    do_rebuild = true;
+                    continue;
+                }
 
-        positional_arguments.push_back(argument);
+                if(flag == 'l') {
+                    do_list = true;
+                    continue;
+                }
+
+                std::cout << fmt::format("error: unrecognized command line option '{}'\n\n{}",
+                                         argument,
+                                         finder_help_page);
+                std::exit(EXIT_FAILURE);
+            }
+        } else {
+            positional_arguments.push_back(argument);
+        }
     }
 
     if(do_rebuild) {
