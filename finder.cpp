@@ -16,9 +16,7 @@ constexpr std::size_t       finder_abi_version = 3;
 const     fs::path          finder_cache_path  = ".findercache";
 
 constexpr std::string_view  finder_help_page = 1 + R"(
-usage: finder [OPTIONS] FILENAME [DIRECTORY]
-       finder [OPTIONS] --rebuild [DIRECTORY]
-       finder [OPTIONS] --list [DIRECTORY]
+usage: finder [OPTIONS] [FILENAME]
 
 OPTIONS
         --help          display usage information
@@ -196,40 +194,38 @@ public:
     }
 };
 
-void rebuild_cache(const fs::path directory) {
+void rebuild_cache() {
     database db;
-    for( const fs::path &path : fs::recursive_directory_iterator(directory) ) {
+    for( const fs::path &path : fs::recursive_directory_iterator(".") ) {
         if(not fs::is_directory(path)) {
             db.add(path);
         }
     }
 
-    std::fstream output_stream{directory / finder_cache_path, std::ios::out};
+    std::fstream output_stream{finder_cache_path, std::ios::out};
     db.marshall(output_stream);
 }
 
-std::fstream open_database_stream(const fs::path directory) {
-    const auto cache_filepath = directory / finder_cache_path;
-
-    if(not fs::exists(cache_filepath)) {
+std::fstream open_database_stream() {
+    if(not fs::exists(finder_cache_path)) {
         std::cerr << "error: no cache has been build for this directory\n";
         std::exit(EXIT_FAILURE);
     }
 
-    std::fstream stream{cache_filepath, std::ios::in};
+    std::fstream stream{finder_cache_path, std::ios::in};
 
     // `std::fstream` instances can't be copied or moved, this works because of the copy ellipson
     // optimization with is guaranteed by the standard.
     return stream;
 }
 
-void locate_exact_filename(const fs::path filename, const fs::path directory) {
+void locate_exact_filename(const fs::path filename) {
     if(filename.has_parent_path()) {
         std::cerr << "error: can't search for paths\n";
         std::exit(EXIT_FAILURE);
     }
 
-    auto input_stream = open_database_stream(directory);
+    auto input_stream = open_database_stream();
 
     const lazy_database db{input_stream};
     for(const auto &path : db.locate(filename)) {
@@ -238,8 +234,8 @@ void locate_exact_filename(const fs::path filename, const fs::path directory) {
     }
 }
 
-void list_all_filepaths(const fs::path directory) {
-    auto input_stream = open_database_stream(directory);
+void list_all_filepaths() {
+    auto input_stream = open_database_stream();
     decoder dec{input_stream};
 
     std::size_t abi_version;
@@ -328,42 +324,16 @@ int main(int argc, const char **argv) {
     }
 
     if(do_rebuild) {
-        if(positional_arguments.size() == 0) {
-            rebuild_cache(".");
-        } else if(positional_arguments.size() == 1) {
-            rebuild_cache(positional_arguments[0]);
-        } else {
-            std::cerr << fmt::format("error: invalid arguments\n\n{}",
-                                     finder_help_page);
-            std::exit(EXIT_FAILURE);
-        }
+        rebuild_cache();
     }
 
-    // Notice: It's possible to both rebuild the cache and the list all files in the same
-    // command. In this case the cache is rebuild before the filepaths are listed.
-
-    if(do_list) {
-        if(positional_arguments.size() == 0) {
-            list_all_filepaths(".");
-        } else if(positional_arguments.size() == 1) {
-            list_all_filepaths(positional_arguments[0]);
-        } else {
-            std::cerr << fmt::format("error: invalid arguments\n\n{}",
-                                     finder_help_page);
-            std::exit(EXIT_FAILURE);
-        }
-    }
-
-    if(!do_list and !do_rebuild) {
-        if(positional_arguments.size() == 1) {
-            locate_exact_filename(positional_arguments[0], ".");
-        } else if(positional_arguments.size() == 2) {
-            locate_exact_filename(positional_arguments[0],
-                                  positional_arguments[1]);
-        } else {
-            std::cerr << fmt::format("error: invalid arguments\n\n{}",
-                                     finder_help_page);
-            std::exit(EXIT_FAILURE);
-        }
+    if(positional_arguments.size() == 0 and do_list) {
+        list_all_filepaths();
+    } else if(positional_arguments.size() == 1 and not do_list) {
+        locate_exact_filename(positional_arguments[0]);
+    } else {
+        std::cerr << fmt::format("error: invalid arguments\n\n{}",
+                                 finder_help_page);
+        std::exit(EXIT_FAILURE);
     }
 }
