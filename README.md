@@ -1,6 +1,6 @@
 # finder
 
-This is essentially locate from findutils buf for local directories.
+This is essentially locate from findutils but for local directories.
 
 The program recursivly searches for files and builds a database which can be
 queried for filenames.
