@@ -8,14 +8,10 @@ queried for filenames.
 ## Usage
 
 ~~~none
-usage: finder [OPTIONS] FILENAME [DIRECTORY]
-       finder [OPTIONS] --rebuild [DIRECTORY]
-       finder [OPTIONS] --list [DIRECTORY]
-
+usage: finder [OPTIONS] [FILENAME]
 OPTIONS
         --help          display usage information
         --version       display version information
-
     -r, --rebuild       rebuild cache
     -l, --list          list all filepaths from the cache
 ~~~
@@ -37,7 +33,7 @@ Finder can be used to locate all filepaths in a directory that have the same fil
 ./a/b/c/bar.txt
 <b>$ touch bar.txt</b>
 <b>$ finder --list                                         # finder doesn't know about './bar.txt'</b>
-./foo.txt                                              <b># until the cache is rebuild</b>
+./foo.txt                                               <b># until the cache is rebuild</b>
 ./a/bar.txt
 ./a/b/foo.txt
 ./a/b/c/bar.txt
@@ -48,6 +44,6 @@ The `--list` option can be used with `grep` or other utilities to search for mor
 <pre><code><b>$ mkdir -p a/b/c</b>
 <b>$ touch foo.txt a/bar.txt a/b/foo.png</b>
 <b>$ finder --rebuild --list | grep '.txt$'                 # find all the files that have the file</b>
-./foo.txt                                               <b># extension '.txt'</b>
+./foo.txt                                                <b># extension '.txt'</b>
 ./a/bar.txt
 </code></pre>
