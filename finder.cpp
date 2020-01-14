@@ -331,7 +331,7 @@ int main(int argc, const char **argv) {
         list_all_filepaths();
     } else if(positional_arguments.size() == 1 and not do_list) {
         locate_exact_filename(positional_arguments[0]);
-    } else {
+    } else if(not do_rebuild) {
         std::cerr << fmt::format("error: invalid arguments\n\n{}",
                                  finder_help_page);
         std::exit(EXIT_FAILURE);
